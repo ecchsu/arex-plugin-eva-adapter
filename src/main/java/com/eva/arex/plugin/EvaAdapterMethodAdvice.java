@@ -8,7 +8,12 @@ import io.arex.inst.runtime.util.MockUtils;
 import net.bytebuddy.asm.Advice;
 
 /**
- * Advice class for recording and replaying methods in com.eva.adapter package
+ * Advice class for recording and replaying methods in defined packages
+ * Records everything: setter, getter and void methods, all business logic
+ *
+ * Replay behavior:
+ * All methods (including void) skip execution and use recorded data
+ * Recorded packages act as complete mocks during replay
  */
 public class EvaAdapterMethodAdvice {
 
@@ -17,81 +22,135 @@ public class EvaAdapterMethodAdvice {
      * If replay data exists, skip the original method execution
      */
     @Advice.OnMethodEnter(skipOn = Advice.OnNonDefaultValue.class, suppress = Throwable.class)
-    public static boolean onEnter(
+    public static Object onEnter(
             @Advice.Origin("#t") String className,
             @Advice.Origin("#m") String methodName,
-            @Advice.AllArguments Object[] args,
-            @Advice.Local("mockResult") MockResult mockResult) {
+            @Advice.AllArguments Object[] args) {
+
+        System.out.println("[AREX] Method ENTER: " + className + "." + methodName);
 
         // Check if we need to replay
         if (ContextManager.needReplay()) {
-            mockResult = replay(className, methodName, args);
-            return mockResult != null && mockResult.notIgnoreMockResult();
+            System.out.println("[AREX] Mode: REPLAY");
+            MockResult mockResult = replay(className, methodName, args);
+            if (mockResult != null && mockResult.notIgnoreMockResult()) {
+                Object replayedData = mockResult.getResult();
+                System.out.println("[AREX] Replay data found");
+
+                //Check if this is a void method maker
+                if (replayedData instanceof VoidMethodMarker) {
+                    System.out.println("[AREX] This is a VOID method - will slip execution");
+                    System.out.println("[AREX] VoidMethodMaker: " + replayedData);
+                    return new Object(); //Skip void method execution during replay
+                }
+
+                System.out.println("[AREX] Non-void method - will skip execution and return mocked result");
+                return replayedData; // Return the replayed data, skip method execution
+            } else {
+                System.out.println("[AREX] No replay data - will execute original method");
+            }
+        } else if (ContextManager.needRecord()) {
+            System.out.println("[AREX] Mode: RECORD");
+        } else {
+            System.out.println("[AREX] Mode: Normal (no record/replay)");
         }
-        return false;
+        return null;
     }
 
     /**
      * Execute after the target method
-     * Record the method result or return mocked result
+     * Record the method result WITHOUT modifying it
      */
-    @Advice.OnMethodExit(suppress = Throwable.class)
+    @Advice.OnMethodExit(suppress = Throwable.class, onThrowable = Throwable.class)
     public static void onExit(
             @Advice.Origin("#t") String className,
             @Advice.Origin("#m") String methodName,
+            @Advice.Origin("#r") String returnType,
             @Advice.AllArguments Object[] args,
-            @Advice.Local("mockResult") MockResult mockResult,
-            @Advice.Return(readOnly = false) Object result,
-            @Advice.Thrown Throwable throwable) {
+            @Advice.Return Object result) {
 
-        // If replay succeeded, return the mocked result
-        if (mockResult != null && mockResult.notIgnoreMockResult()) {
-            result = mockResult.getResult();
-            return;
-        }
-
-        // Record the method execution
+        //Record the method execution
         if (ContextManager.needRecord()) {
-            record(className, methodName, args, result, throwable);
+            System.out.println("[AREX] Recording method execution...");
+
+            //Check if this is a void method by checking the return type descriptor
+            if ("void".equals(returnType)) {
+                System.out.println("[AREX] Detected: Void method, creating VoidMethodMarker");
+
+                //Record void method with VoidMethodMArker - use no-arg constructor
+                VoidMethodMarker marker = new VoidMethodMarker();
+                System.out.println("[AREX] VoidMethodMarker created for: " + className + "." + methodName);
+                record(className, methodName, args, marker);
+                System.out.println("[AREX] Void method recorded");
+            } else {
+                System.out.println("[AREX] Detected non-void method");
+
+                if (result == null) {
+                    System.out.println("[AREX] Return value is null");
+                } else {
+                    System.out.println("[AREX] Return value: " + result.getClass().getName());
+                }
+
+                //Record non-void method normally
+                record(className, methodName, args, result);
+                System.out.println("[AREX] Non-void method recorded");
+            }
+        } else if (ContextManager.needReplay()) {
+            //In replay mode, log what happened
+            if ("void".equals(returnType)) {
+                System.out.println("[AREX] Void method was skipped during replay (using recorded data)");
+            } else {
+                System.out.println("[AREX] Non-void method was skipped during replay (returned recorded data)");
+            }
         }
     }
 
     /**
      * Record method execution
      */
-    private static void record(String className, String methodName, Object[] args, 
-                               Object result, Throwable throwable) {
+    public static void record(String className, String methodName, Object[] args, Object result) {
         try {
+            System.out.println("[AREX] Building mocker for: " + className + "." + methodName);
             Mocker mocker = buildMocker(className, methodName, args);
-            
-            // Record the result or exception
-            if (throwable != null) {
-                mocker.getTargetResponse().setAttribute("exception", throwable.getClass().getName());
-                mocker.getTargetResponse().setAttribute("exceptionMessage", throwable.getMessage());
-            } else {
+
+            //Record the result
+            if (result != null) {
+                System.out.println("[AREX] Serializing result of type: " + className + "." + methodName);
                 mocker.getTargetResponse().setBody(Serializer.serialize(result));
+                mocker.getTargetResponse().setType(result.getClass().getName());
+                System.out.println("[AREX] Result serialized successfully");
+            } else {
+                System.out.println("[AREX] Result is null, storing empty response");
             }
-            
-            MockUtils.recordMocker(mocker);
+
+            System.out.println("[AREX] Calling MockUtils.recordMocker()...");
+            MockUtils.recordMocker(mocker);;
+            System.out.println("[AREX] Recorded method successfully: " + className + "." + methodName);
         } catch (Throwable t) {
-            // Log but don't interrupt the application
-            System.err.println("[AREX] Failed to record EvaAdapter method: " + t.getMessage());
+            //Log but don't interrupt the application
+            System.err.println("[AREX] Failed to record method: " + className + "." + methodName + " - " + t.getMessage());
+            t.printStackTrace();
         }
     }
 
     /**
      * Replay method execution
      */
-    private static MockResult replay(String className, String methodName, Object[] args) {
+    public static MockResult replay(String className, String methodName, Object[] args) {
         try {
+            System.out.println("[AREX] Building mocker for replay: " + className + "." + methodName);
             Mocker mocker = buildMocker(className, methodName, args);
             Object replayResult = MockUtils.replayBody(mocker);
-            
+
             if (replayResult != null) {
+                System.out.println("[AREX] Replayed method: " + className + "." + methodName);
+                System.out.println("[AREX] Replayed result type: " + replayResult.getClass().getSimpleName());
                 return MockResult.success(replayResult);
+            } else {
+                System.out.println("[AREX] No replay data found");
             }
         } catch (Throwable t) {
-            System.err.println("[AREX] Failed to replay EvaAdapter method: " + t.getMessage());
+            System.err.println("[AREX] Failed to replay method: " + className + "." + methodName + " - " + t.getMessage());
         }
         return null;
     }
@@ -99,21 +158,21 @@ public class EvaAdapterMethodAdvice {
     /**
      * Build a Mocker object for the method call
      */
-    private static Mocker buildMocker(String className, String methodName, Object[] args) {
-        // Create a dynamic mocker with operation name
-        String operationName = className + "." + methodName;
-        Mocker mocker = MockUtils.createDynamicClass(operationName);
-        
-        // Set request parameters
+    public static Mocker buildMocker(String className, String methodName, Object[] args) {
+        Mocker mocker = MockUtils.createDynamicClass(className, methodName);
+
+        //Set request parameters
         if (args != null && args.length > 0) {
-            mocker.getTargetRequest().setBody(Serializer.serialize(args));
+            try {
+                mocker.getTargetRequest().setBody(Serializer.serialize(args));
+                mocker.getTargetResponse().setType(args.getClass().getName());
+            } catch (Exception e) {
+                System.err.println("[AREX] Failed to serialize arguments for: " + className + "." + methodName);
+            }
         }
-        
-        // Add metadata
-        mocker.getTargetRequest().setAttribute("className", className);
-        mocker.getTargetRequest().setAttribute("methodName", methodName);
-        mocker.getTargetRequest().setAttribute("parameterCount", String.valueOf(args != null ? args.length : 0));
-        
+
+        System.out.println("[AREX] Mocker created with operation: " + className + "." + methodName + " (type: DynamicClass)");
+
         return mocker;
     }
 }

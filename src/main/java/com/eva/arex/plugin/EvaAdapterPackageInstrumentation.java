@@ -12,16 +12,20 @@ import static java.util.Collections.singletonList;
 import static net.bytebuddy.matcher.ElementMatchers.*;
 
 /**
- * Instrumentation for all public methods in com.eva.adapter package
+ * Instrumentation for all public methods under com.eva.adapter packages
  */
 public class EvaAdapterPackageInstrumentation extends TypeInstrumentation {
 
     @Override
     public ElementMatcher<TypeDescription> typeMatcher() {
-        // Match all classes in com.eva.adapter package and subpackages
+        // Match all classes under com.eva.adapter packages and subpackages
         // Exclude AREX internal classes
-        return nameStartsWith("com.eva.adapter")
-                .and(not(nameStartsWith("io.arex")));
+        return nameStartsWith("com.eva.adapter.a")
+                .or(nameStartsWith("com.eva.adapter.b"))
+                .or(nameStartsWith("com.eva.adapter.c"))
+                .or(nameStartsWith("com.eva.adapter.d"))
+                .or(nameStartsWith("com.eva.adapter.e"))
+                .or(nameStartsWith("com.eva.adapter.f"));
     }
 
     @Override
@@ -29,33 +33,13 @@ public class EvaAdapterPackageInstrumentation extends TypeInstrumentation {
         // Match all public methods (excluding constructors, getters, setters)
         ElementMatcher<MethodDescription> matcher = isPublic()
                 .and(not(isConstructor()))
-                .and(not(isGetter()))
-                .and(not(isSetter()))
                 .and(not(isSynthetic()));
 
         return singletonList(
             new MethodInstrumentation(
                 matcher, 
-                EvaAdapterMethodAdvice.class.getName()
+                MesAdapterMethodAdvice.class.getName()
             )
         );
-    }
-
-    /**
-     * Helper method to check if method is a getter
-     */
-    private static ElementMatcher<MethodDescription> isGetter() {
-        return nameStartsWith("get")
-                .and(takesNoArguments())
-                .and(not(returns(void.class)));
-    }
-
-    /**
-     * Helper method to check if method is a setter
-     */
-    private static ElementMatcher<MethodDescription> isSetter() {
-        return nameStartsWith("set")
-                .and(takesArguments(1))
-                .and(returns(void.class));
     }
 }

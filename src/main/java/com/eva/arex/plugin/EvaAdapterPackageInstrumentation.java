@@ -38,7 +38,7 @@ public class EvaAdapterPackageInstrumentation extends TypeInstrumentation {
         return singletonList(
             new MethodInstrumentation(
                 matcher, 
-                MesAdapterMethodAdvice.class.getName()
+                EvaAdapterMethodAdvice.class.getName()
             )
         );
     }

@@ -40,8 +40,7 @@ public class EvaAdapterMethodAdvice {
                 //Check if this is a void method maker
                 if (replayedData instanceof VoidMethodMarker) {
                     System.out.println("[AREX] This is a VOID method - will slip execution");
-                    System.out.println("[AREX] VoidMethodMaker: " + replayedData);
-                    return new Object(); //Skip void method execution during replay
+                    return true; //Skip orginal method
                 }
 
                 System.out.println("[AREX] Non-void method - will skip execution and return mocked result");

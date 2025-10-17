@@ -19,13 +19,7 @@ public class EvaAdapterPackageInstrumentation extends TypeInstrumentation {
     @Override
     public ElementMatcher<TypeDescription> typeMatcher() {
         // Match all classes under com.eva.adapter packages and subpackages
-        // Exclude AREX internal classes
-        return nameStartsWith("com.eva.adapter.a")
-                .or(nameStartsWith("com.eva.adapter.b"))
-                .or(nameStartsWith("com.eva.adapter.c"))
-                .or(nameStartsWith("com.eva.adapter.d"))
-                .or(nameStartsWith("com.eva.adapter.e"))
-                .or(nameStartsWith("com.eva.adapter.f"));
+        return nameStartsWith("com.eva.adapter");
     }
 
     @Override

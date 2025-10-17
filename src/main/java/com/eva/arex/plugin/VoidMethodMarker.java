@@ -13,28 +13,15 @@ import java.io.Serializable;
 public class VoidMethodMarker implements Serializable {
 
     private static final long serialVersionUID = 1L;
-    
-    private String executionInfo;
+
     private long timestamp;
-    private String methodSignature;
-    
-    public VoidMethodMarker(String executionInfo) {
-        System.out.println("[AREX] VoidMethodMarker constructor called with parameter");
-        this.executionInfo = (executionInfo != null && !executionInfo.isEmpty())
-                            ? executionInfo
-                            : "void method executed";
-        this.timestamp = System.currentTimeMillis();
-        this.methodSignature = extractMethodSignature(this.executionInfo);
-    }
 
     /**
      * No-arg constructor for deserialization
      */
     public VoidMethodMarker() {
-        System.out.println("[AREX] VoidMethodMarker no-arg constructor called");
-        this.executionInfo = "void method executed";
+        System.out.println("[AREX] VoidMethodMarker no-arg constructor called");;
         this.timestamp = System.currentTimeMillis();
-        this.methodSignature = "unknown";
     }
     
     public String extractMethodSignature(String info) {
@@ -68,23 +55,14 @@ public class VoidMethodMarker implements Serializable {
         }
     }
     
-    public String getExecutionInfo() {
-        return executionInfo;
-    }
-    
     public long getTimestamp() {
         return timestamp;
-    }
-    
-    public String getMethodSignature() {
-        return methodSignature;
     }
     
     @Override
     public String toString() {
         return "VoidMethodExecution{" +
-                "method='" + methodSignature + "'" +
-                ", timestamp=" + timestamp +
+                "timestamp=" + timestamp +
                 "}";
     }
     
@@ -93,12 +71,11 @@ public class VoidMethodMarker implements Serializable {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         VoidMethodMarker that = (VoidMethodMarker)  o;
-        if (methodSignature == null) return that.methodSignature == null;
-        return methodSignature.equals(that.methodSignature);
+        return timestamp == that.timestamp;
     }
     
     @Override
     public int hashCode() {
-        return methodSignature != null ? methodSignature.hashCode() : 0;
+        return Long.hashCode(timestamp);
     }
 }
